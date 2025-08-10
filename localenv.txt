@@ -1,0 +1,3 @@
+PUBLIC_SUPABASE_URL=fy
+PUBLIC_SUPABASE_ANON_KEY=fy2
+//random place holder for .env.local
