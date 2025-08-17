@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { isValidEmail, isValidPassword, redirectIfLoggedIn } from '$lib/server/auth';
+import { UserRoleService } from '$lib/services/user-role.service';
 import type { Actions, RequestEvent } from '@sveltejs/kit';
 
 // Check if already logged in - redirect if so
@@ -37,7 +38,7 @@ export const actions: Actions = {
     }
 
     // Attempt login
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     });
@@ -49,7 +50,19 @@ export const actions: Actions = {
       });
     }
 
-    // Success - redirect to myspace
+    // Check user role and redirect accordingly
+    if (data.user) {
+      const userRoleService = new UserRoleService(supabase);
+      const role = await userRoleService.getUserRole(data.user.id);
+      
+      if (role === 'admin') {
+        throw redirect(303, '/admin');
+      } else {
+        throw redirect(303, '/myspace');
+      }
+    }
+
+    // Fallback to myspace if role check fails
     throw redirect(303, '/myspace');
   }
 };

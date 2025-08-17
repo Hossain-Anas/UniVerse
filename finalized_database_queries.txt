@@ -365,3 +365,45 @@ CREATE POLICY "books_admin_all" ON books FOR ALL USING (
 
 -- Grant permissions for books table
 GRANT ALL ON books TO authenticated;
+
+
+
+--admin issue resolve -> 
+-- Create a function to get user role that bypasses RLS
+CREATE OR REPLACE FUNCTION public.get_user_role(user_id UUID)
+RETURNS TEXT AS $$
+BEGIN
+  RETURN (
+    SELECT role 
+    FROM public.user_roles 
+    WHERE id = user_id
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.get_user_role(UUID) TO authenticated;
+
+
+-- Allow public read access to event images
+CREATE POLICY "Public read access for event images" ON storage.objects
+FOR SELECT USING (bucket_id = 'event-images');
+
+-- Allow authenticated users to upload event images
+CREATE POLICY "Authenticated users can upload event images" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'event-images' AND auth.role() = 'authenticated');
+
+
+-- Allow public read access to event images
+CREATE POLICY "Public read access for event images" ON storage.objects
+FOR SELECT USING (bucket_id = 'event-images');
+
+-- Allow authenticated users to upload event images
+CREATE POLICY "Authenticated users can upload event images" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'event-images' AND auth.role() = 'authenticated');
+
+
+DROP POLICY IF EXISTS "user_roles_select_admin" ON public.user_roles;
+
+
+

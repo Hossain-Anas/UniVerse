@@ -15,6 +15,12 @@ const supabase: Handle = async ({ event, resolve }) => {
     },
   })
 
+  // Add getSession method to locals
+  event.locals.getSession = async () => {
+    const { data: { session } } = await event.locals.supabase.auth.getSession()
+    return session
+  }
+
   return resolve(event, {
     filterSerializedResponseHeaders(name) {
       return name === 'content-range'
