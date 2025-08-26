@@ -3,9 +3,10 @@
   import * as Carousel from "$lib/components/ui/carousel/index.js";
   import { supabase } from '$lib/supabase';
   import { EventController } from '$lib/controllers/event.controller';
+  import BannerMarquee from '$lib/components/banner-marquee.svelte';
   import type { PageData } from './$types';
   
-  let { data } = $props<{ data: PageData }>();
+  let { data } = $props();
   
   let events = $derived(data.events || []);
   let userReminders = $derived(data.userReminders || []);
@@ -148,9 +149,10 @@
     UNI<br/>VERSE
   </a>
   
+  <!-- Banner Marquee - Below Navigation -->
+  <BannerMarquee />
+  
   <div class="container mx-auto px-4 py-8">
-    <h1 class="text-3xl font-semibold text-center mb-8">MySpace</h1>
-    
     <!-- Messages -->
     {#if errorMessage}
       <div class="mb-4 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200">

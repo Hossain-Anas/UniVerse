@@ -60,6 +60,25 @@
             </div>
           </a>
           
+          <a 
+            href="/admin/banner-requests"
+            class="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow border border-gray-200 hover:border-gray-300"
+          >
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center">
+                  <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.122 2.122"></path>
+                  </svg>
+                </div>
+              </div>
+              <div class="ml-4">
+                <h3 class="text-lg font-medium text-gray-900">Banner Requests</h3>
+                <p class="text-gray-600">Review and manage advertisement requests</p>
+              </div>
+            </div>
+          </a>
+          
           <!-- Add more admin sections here as needed -->
         </div>
       </div>

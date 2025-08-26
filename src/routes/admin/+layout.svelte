@@ -11,6 +11,7 @@
         </div>
         <div class="flex items-center space-x-4">
           <a href="/admin/events" class="text-gray-600 hover:text-gray-900">Events</a>
+          <a href="/admin/banner-requests" class="text-gray-600 hover:text-gray-900">Banner Requests</a>
           <a href="/" class="text-gray-600 hover:text-gray-900">Back to Site</a>
         </div>
       </div>

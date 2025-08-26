@@ -207,8 +207,13 @@
     successMessage = '';
 
     try {
+      const formData = new FormData();
+      // Add a dummy field since SvelteKit actions expect form data
+      formData.append('action', 'markAllAsRead');
+
       const response = await fetch('?/markAllAsRead', {
-        method: 'POST'
+        method: 'POST',
+        body: formData
       });
 
       const result = await response.json();
