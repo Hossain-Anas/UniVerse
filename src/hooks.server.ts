@@ -8,9 +8,14 @@ const supabase: Handle = async ({ event, resolve }) => {
     cookies: {
       getAll: () => event.cookies.getAll(),
       setAll: (cookiesToSet) => {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          event.cookies.set(name, value, { path: '/', ...options })
-        })
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            event.cookies.set(name, value, { path: '/', ...options })
+          })
+        } catch (error) {
+          // Silently handle cookie setting errors
+          console.warn('Failed to set cookies:', error)
+        }
       },
     },
   })
