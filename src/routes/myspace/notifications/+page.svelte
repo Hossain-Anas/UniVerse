@@ -2,13 +2,156 @@
   import * as Table from "$lib/components/ui/table/index.js";
   import * as Card from "$lib/components/ui/card/index.js";
   import type { PageData } from './$types';
+  import { supabase } from '$lib/supabase'
+  import { browser } from '$app/environment'
   
-  export let data: PageData;
+  let { data }: { data: PageData } = $props();
   
-  let notifications = data.notifications || [];
-  let loading = false;
-  let errorMessage = '';
-  let successMessage = '';
+  let notifications = $state(data.notifications || []);
+  let loading = $state(false);
+  let errorMessage = $state('');
+  let successMessage = $state('');
+  let sessionBootstrapTrigger = $state(0);
+  let pollingInterval: any = null;
+
+  let channel: any = null;
+  if (browser) {
+    $effect(() => {
+      // Include sessionBootstrapTrigger in dependencies to re-run when session is bootstrapped
+      sessionBootstrapTrigger;
+      const userId = data.session?.user?.id;
+      console.log('Effect triggered - userId:', userId);
+      
+      if (!userId) {
+        // No user yet, ensure we are not subscribed
+        if (channel) {
+          supabase.removeChannel(channel);
+          channel = null;
+        }
+        
+        // Try to bootstrap client auth from server session so Realtime works in this tab
+        fetch('/api/session')
+          .then((r) => r.json())
+          .then((j) => {
+            const s = j?.session;
+            console.log('Session bootstrap response:', j);
+            if (s?.access_token && s?.refresh_token) {
+              // Set the auth session for the client SDK
+              supabase.auth.setSession({
+                access_token: s.access_token,
+                refresh_token: s.refresh_token,
+              }).then((result) => {
+                console.log('Auth session set result:', result);
+                // After setting session, try to get the user and start subscription
+                if (result.data.user) {
+                  console.log('User authenticated after bootstrap:', result.data.user.id);
+                  // Force a re-run of the effect by updating a reactive variable
+                  sessionBootstrapTrigger++;
+                }
+              });
+            } else {
+              console.log('No session tokens available for bootstrap');
+            }
+          })
+          .catch((err) => {
+            console.error('Session bootstrap error:', err);
+          });
+        return;
+      }
+
+      // Recreate the channel whenever the userId changes
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
+
+      channel = supabase
+        .channel(`realtime:notifications-${userId}`)
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'notifications'
+        }, (payload: any) => {
+          console.log('Realtime INSERT event triggered:', payload);
+          const row = (payload as any).new;
+          if (!row) {
+            console.log('No row data in INSERT payload');
+            return;
+          }
+          console.log('Realtime INSERT received:', row);
+          console.log('Current userId:', userId, 'Row userId:', row.user_id, 'Match:', row.user_id === userId);
+          if (row.user_id === userId) {
+            console.log('Adding notification to list:', row);
+            notifications = [row, ...notifications];
+          } else {
+            console.log('User ID mismatch - not adding to list');
+          }
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications' }, (payload: any) => {
+          const row = (payload as any).new;
+          if (!row) return;
+          console.log('Realtime UPDATE received:', row);
+          if (row.user_id === userId) {
+            notifications = notifications.map((n) => (n.id === row.id ? { ...n, ...row } : n));
+          }
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'notifications' }, (payload: any) => {
+          const row = (payload as any).old;
+          if (!row) return;
+          console.log('Realtime DELETE received:', row);
+          if (row.user_id === userId) {
+            notifications = notifications.filter((n) => n.id !== row.id);
+          }
+        })
+        .subscribe((status) => {
+          console.log('Realtime subscription status:', status);
+        });
+
+      console.log('Realtime subscription started for notifications page');
+
+      // Start polling for new notifications every 5 seconds as backup
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+      
+      pollingInterval = setInterval(async () => {
+        try {
+          const { data: newNotifications, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+          
+          if (error) {
+            console.error('Polling error:', error);
+            return;
+          }
+          
+          // Check if we have new notifications
+          const currentIds = new Set(notifications.map(n => n.id));
+          const newItems = newNotifications?.filter(n => !currentIds.has(n.id)) || [];
+          
+          if (newItems.length > 0) {
+            console.log('Polling found new notifications:', newItems);
+            notifications = [...newItems, ...notifications];
+          }
+        } catch (error) {
+          console.error('Polling error:', error);
+        }
+      }, 5000);
+
+      return () => {
+        if (channel) {
+          supabase.removeChannel(channel);
+          channel = null;
+        }
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          pollingInterval = null;
+        }
+      };
+    });
+  }
 
   async function markAsRead(notificationId: string) {
     loading = true;
@@ -26,56 +169,30 @@
 
       const result = await response.json();
 
-      console.log('Mark as read - response:', result);
-      console.log('Mark as read - response type:', typeof result);
-      console.log('Mark as read - response.data:', result.data);
-      console.log('Mark as read - response.data type:', typeof result.data);
+      console.log('Server response:', result);
+      let actionResult: any;
+      try {
+        actionResult = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+      } catch {
+        actionResult = result.data;
+      }
+      console.log('Parsed action result:', actionResult);
       
-      if (result.type === 'success' && result.data) {
-        let actionResult;
-        try {
-          actionResult = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
-        } catch (parseError) {
-          console.error('Mark as read - parse error:', parseError);
-          actionResult = result.data;
-        }
-        console.log('Mark as read - parsed action result:', actionResult);
-        
-        // Handle the array response format from SvelteKit
-        let success = false;
-        let error = null;
-        
-        if (Array.isArray(actionResult)) {
-          // The first element contains the success data
-          const firstElement = actionResult[0];
-          if (firstElement && typeof firstElement === 'object' && 'success' in firstElement) {
-            success = firstElement.success === true || firstElement.success === 1;
-            error = firstElement.error;
-          } else if (actionResult[1] === true) {
-            // Second element is true, indicating success
-            success = true;
-          }
-        } else if (actionResult && typeof actionResult === 'object' && 'success' in actionResult) {
-          success = actionResult.success === true || actionResult.success === 1;
-          error = actionResult.error;
-        }
-        
-        if (success) {
-          successMessage = 'Notification marked as read';
-          // Update the notification in the list
-          notifications = notifications.map(notification => 
-            notification.id === notificationId 
-              ? { ...notification, is_read: true }
-              : notification
-          );
-          console.log('Mark as read - updated notifications:', notifications);
-        } else {
-          errorMessage = error || 'Failed to mark notification as read';
-          console.error('Mark as read - action failed:', error);
-        }
+      // For SvelteKit actions, the result is often an array where the first element is the actual result
+      const actualResult = Array.isArray(actionResult) ? actionResult[0] : actionResult;
+      const success = actualResult && (actualResult.success === true || actualResult.success === 1);
+      console.log('Action result success:', actionResult?.success);
+      console.log('Action result error:', actionResult?.error);
+
+      if (success) {
+        successMessage = 'Notification marked as read';
+        notifications = notifications.map(notification => 
+          notification.id === notificationId 
+            ? { ...notification, is_read: true }
+            : notification
+        );
       } else {
-        errorMessage = 'Failed to mark notification as read';
-        console.error('Mark as read - unexpected response format:', result);
+        errorMessage = (actualResult && actualResult.error) || 'Failed to mark notification as read';
       }
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : 'An error occurred';
@@ -96,43 +213,22 @@
 
       const result = await response.json();
 
-      if (result.type === 'success' && result.data) {
-        let actionResult;
-        try {
-          actionResult = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
-        } catch (parseError) {
-          console.error('Mark all as read - parse error:', parseError);
-          actionResult = result.data;
-        }
-        
-        // Handle the array response format from SvelteKit
-        let success = false;
-        let error = null;
-        
-        if (Array.isArray(actionResult)) {
-          // The first element contains the success data
-          const firstElement = actionResult[0];
-          if (firstElement && typeof firstElement === 'object' && 'success' in firstElement) {
-            success = firstElement.success === true || firstElement.success === 1;
-            error = firstElement.error;
-          } else if (actionResult[1] === true) {
-            // Second element is true, indicating success
-            success = true;
-          }
-        } else if (actionResult && typeof actionResult === 'object' && 'success' in actionResult) {
-          success = actionResult.success === true || actionResult.success === 1;
-          error = actionResult.error;
-        }
-        
-        if (success) {
-          successMessage = 'All notifications marked as read';
-          // Update all notifications in the list
-          notifications = notifications.map(notification => ({ ...notification, is_read: true }));
-        } else {
-          errorMessage = error || 'Failed to mark all notifications as read';
-        }
+      let actionResult: any;
+      try {
+        actionResult = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+      } catch {
+        actionResult = result.data;
+      }
+      
+      // For SvelteKit actions, the result is often an array where the first element is the actual result
+      const actualResult = Array.isArray(actionResult) ? actionResult[0] : actionResult;
+      const success = actualResult && (actualResult.success === true || actualResult.success === 1);
+
+      if (success) {
+        successMessage = 'All notifications marked as read';
+        notifications = notifications.map(notification => ({ ...notification, is_read: true }));
       } else {
-        errorMessage = 'Failed to mark all notifications as read';
+        errorMessage = (actualResult && actualResult.error) || 'Failed to mark all notifications as read';
       }
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : 'An error occurred';
@@ -160,47 +256,34 @@
       });
 
       const result = await response.json();
+      console.log('Delete notification - raw response:', result);
 
-      if (result.type === 'success' && result.data) {
-        let actionResult;
-        try {
-          actionResult = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
-        } catch (parseError) {
-          console.error('Delete notification - parse error:', parseError);
-          actionResult = result.data;
-        }
-        
-        // Handle the array response format from SvelteKit
-        let success = false;
-        let error = null;
-        
-        if (Array.isArray(actionResult)) {
-          // The first element contains the success data
-          const firstElement = actionResult[0];
-          if (firstElement && typeof firstElement === 'object' && 'success' in firstElement) {
-            success = firstElement.success === true || firstElement.success === 1;
-            error = firstElement.error;
-          } else if (actionResult[1] === true) {
-            // Second element is true, indicating success
-            success = true;
-          }
-        } else if (actionResult && typeof actionResult === 'object' && 'success' in actionResult) {
-          success = actionResult.success === true || actionResult.success === 1;
-          error = actionResult.error;
-        }
-        
-        if (success) {
-          successMessage = 'Notification deleted';
-          // Remove the notification from the list
-          notifications = notifications.filter(notification => notification.id !== notificationId);
-        } else {
-          errorMessage = error || 'Failed to delete notification';
-        }
+      let actionResult: any;
+      try {
+        actionResult = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+      } catch {
+        actionResult = result.data;
+      }
+      console.log('Delete notification - parsed actionResult:', actionResult);
+      
+      // For SvelteKit actions, the result is often an array where the first element is the actual result
+      const actualResult = Array.isArray(actionResult) ? actionResult[0] : actionResult;
+      console.log('Delete notification - actualResult:', actualResult);
+      
+      const success = actualResult && (actualResult.success === true || actualResult.success === 1);
+      console.log('Delete notification - success check:', success, 'actionResult.success:', actionResult?.success);
+
+      if (success) {
+        successMessage = 'Notification deleted';
+        notifications = notifications.filter(notification => notification.id !== notificationId);
+        console.log('Delete notification - removed from frontend list');
       } else {
-        errorMessage = 'Failed to delete notification';
+        errorMessage = (actualResult && actualResult.error) || 'Failed to delete notification';
+        console.log('Delete notification - error message:', errorMessage);
       }
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      console.error('Delete notification - catch error:', error);
     } finally {
       loading = false;
     }
@@ -221,7 +304,7 @@
     return new Date(dateString).toLocaleString();
   }
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = $derived(notifications.filter((n) => !n.is_read).length);
 </script>
 
 <div class="w-full min-h-[100dvh] pt-16 bg-[hsl(222.2_47.4%_11.2%)] text-white">
@@ -235,7 +318,7 @@
       <h1 class="text-3xl font-semibold">Notifications</h1>
       {#if unreadCount > 0}
         <button
-          on:click={markAllAsRead}
+          onclick={markAllAsRead}
           disabled={loading}
           class="px-4 py-2 text-sm font-medium text-white border border-white/20 rounded-md hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -268,80 +351,80 @@
       <Card.Root>
         <Card.Content class="p-0">
           <Table.Root>
-                         <Table.Header>
-               <Table.Row class="border-[hsl(214.3_31.8%_91.4%)]/20">
-                 <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Type</Table.Head>
-                 <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Title</Table.Head>
-                 <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Message</Table.Head>
-                 <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Date</Table.Head>
-                 <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Status</Table.Head>
-                 <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Actions</Table.Head>
-               </Table.Row>
-             </Table.Header>
+            <Table.Header>
+              <Table.Row class="border-[hsl(214.3_31.8%_91.4%)]/20">
+                <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Type</Table.Head>
+                <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Title</Table.Head>
+                <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Message</Table.Head>
+                <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Date</Table.Head>
+                <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Status</Table.Head>
+                <Table.Head class="text-[hsl(222.2_47.4%_11.2%)] font-medium">Actions</Table.Head>
+              </Table.Row>
+            </Table.Header>
             <Table.Body>
               {#each notifications as notification (notification.id)}
-                                 <Table.Row class="border-[hsl(214.3_31.8%_91.4%)]/20 hover:bg-[hsl(214.3_31.8%_91.4%)]/5">
-                   <Table.Cell class="text-2xl">
-                     {getTypeIcon(notification.type)}
-                   </Table.Cell>
-                   <Table.Cell class="font-medium text-[hsl(222.2_47.4%_11.2%)]">
-                     {notification.title}
-                   </Table.Cell>
-                                       <Table.Cell class="text-[hsl(222.2_47.4%_11.2%)] max-w-xs">
-                      <button 
-                        class="truncate cursor-pointer hover:text-blue-300 transition-colors text-left w-full bg-transparent border-none p-0"
-                        title={notification.message}
-                        on:click={() => {
+                <Table.Row class="border-[hsl(214.3_31.8%_91.4%)]/20 hover:bg-[hsl(214.3_31.8%_91.4%)]/5">
+                  <Table.Cell class="text-2xl">
+                    {getTypeIcon(notification.type)}
+                  </Table.Cell>
+                  <Table.Cell class="font-medium text-[hsl(222.2_47.4%_11.2%)]">
+                    {notification.title}
+                  </Table.Cell>
+                  <Table.Cell class="text-[hsl(222.2_47.4%_11.2%)] max-w-xs">
+                    <button 
+                      class="truncate cursor-pointer hover:text-blue-300 transition-colors text-left w-full bg-transparent border-none p-0"
+                      title={notification.message}
+                      onclick={() => {
+                        if (notification.message.length > 50) {
+                          alert(notification.message);
+                        }
+                      }}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
                           if (notification.message.length > 50) {
                             alert(notification.message);
                           }
-                        }}
-                        on:keydown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            if (notification.message.length > 50) {
-                              alert(notification.message);
-                            }
-                          }
-                        }}
-                      >
-                        {notification.message}
-                      </button>
-                    </Table.Cell>
-                   <Table.Cell class="text-[hsl(222.2_47.4%_11.2%)] text-sm">
-                     {formatDate(notification.created_at)}
-                   </Table.Cell>
-                                     <Table.Cell>
-                     {#if notification.is_read}
-                       <span class="px-2 py-1 text-xs rounded-full bg-green-500/20 text-[hsl(222.2_47.4%_11.2%)] font-medium">
-                         Read
-                       </span>
-                     {:else}
-                       <span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-[hsl(222.2_47.4%_11.2%)] font-medium">
-                         Unread
-                       </span>
-                     {/if}
-                   </Table.Cell>
-                   <Table.Cell>
-                     <div class="flex gap-2">
-                                              {#if !notification.is_read}
-                          <button
-                            on:click={() => markAsRead(notification.id)}
-                            disabled={loading}
-                            class="px-2 py-1 text-xs font-medium text-[hsl(222.2_47.4%_11.2%)] border border-[hsl(222.2_47.4%_11.2%)]/20 rounded hover:bg-[hsl(222.2_47.4%_11.2%)]/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Mark Read
-                          </button>
-                        {/if}
+                        }
+                      }}
+                    >
+                      {notification.message}
+                    </button>
+                  </Table.Cell>
+                  <Table.Cell class="text-[hsl(222.2_47.4%_11.2%)] text-sm">
+                    {formatDate(notification.created_at)}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {#if notification.is_read}
+                      <span class="px-2 py-1 text-xs rounded-full bg-green-500/20 text-[hsl(222.2_47.4%_11.2%)] font-medium">
+                        Read
+                      </span>
+                    {:else}
+                      <span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-[hsl(222.2_47.4%_11.2%)] font-medium">
+                        Unread
+                      </span>
+                    {/if}
+                  </Table.Cell>
+                  <Table.Cell>
+                    <div class="flex gap-2">
+                      {#if !notification.is_read}
                         <button
-                          on:click={() => deleteNotification(notification.id)}
+                          onclick={() => markAsRead(notification.id)}
                           disabled={loading}
-                          class="px-2 py-1 text-xs font-medium text-[hsl(222.2_47.4%_11.2%)] border border-red-500/20 rounded hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                          class="px-2 py-1 text-xs font-medium text-[hsl(222.2_47.4%_11.2%)] border border-[hsl(222.2_47.4%_11.2%)]/20 rounded hover:bg-[hsl(222.2_47.4%_11.2%)]/10 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Delete
+                          Mark Read
                         </button>
-                     </div>
-                   </Table.Cell>
+                      {/if}
+                      <button
+                        onclick={() => deleteNotification(notification.id)}
+                        disabled={loading}
+                        class="px-2 py-1 text-xs font-medium text-[hsl(222.2_47.4%_11.2%)] border border-red-500/20 rounded hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </Table.Cell>
                 </Table.Row>
               {/each}
             </Table.Body>

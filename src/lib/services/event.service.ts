@@ -95,12 +95,8 @@ export class EventService {
       throw new Error('You already have a reminder set for this event');
     }
 
-    // Create the reminder
+    // Create the reminder; notifications will be generated when due
     const reminder = await eventRepository.createEventReminder(this.supabase, userId, reminderData);
-
-    // Create a notification for the reminder
-    await this.notificationService.createEventReminderNotification(userId, reminderData.event_id, reminderData.reminder_time);
-
     return reminder;
   }
 

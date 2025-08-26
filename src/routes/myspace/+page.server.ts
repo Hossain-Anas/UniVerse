@@ -53,9 +53,17 @@ export const actions = {
 
     try {
       const eventController = new EventController(locals.supabase);
+      // Normalize reminder time to UTC. If the incoming value has no timezone,
+      // assume Asia/Dhaka (UTC+06:00) based on project requirements.
+      let normalizedIso = reminderTime;
+      const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(reminderTime);
+      if (!hasTz) {
+        normalizedIso = `${reminderTime.replace(' ', 'T')}+06:00`;
+      }
+      const iso = new Date(normalizedIso).toISOString();
       const result = await eventController.createEventReminder(session.user.id, {
         event_id: eventId,
-        reminder_time: reminderTime
+        reminder_time: iso
       });
 
       console.log('Server action - result:', result); // Debug log

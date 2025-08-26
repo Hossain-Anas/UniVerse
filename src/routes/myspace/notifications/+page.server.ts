@@ -33,6 +33,11 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 };
 
 export const actions = {
+  processOverdue: async ({ locals }: RequestEvent) => {
+    const notificationController = new NotificationController(locals.supabase);
+    const result = await notificationController.processOverdueEventReminders();
+    return result;
+  },
   markAsRead: async ({ request, locals }: RequestEvent) => {
     const formData = await request.formData();
     const notificationId = formData.get('notificationId') as string;
