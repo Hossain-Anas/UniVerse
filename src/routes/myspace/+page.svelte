@@ -149,8 +149,10 @@
     UNI<br/>VERSE
   </a>
   
-  <!-- Banner Marquee - Below Navigation -->
-  <BannerMarquee />
+  <!-- Banner Marquee - Below Navigation with proper spacing -->
+  <div class="mt-8 mb-4">
+    <BannerMarquee />
+  </div>
   
   <div class="container mx-auto px-4 py-8">
     <!-- Messages -->
