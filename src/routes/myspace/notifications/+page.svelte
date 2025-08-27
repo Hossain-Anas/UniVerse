@@ -315,9 +315,7 @@
   }
 
   function getDisplayMessage(notification: any): string {
-    return notification?.type === 'event'
-      ? stripTimeFromReminder(notification.message)
-      : notification.message;
+    return notification.message;
   }
 
   const unreadCount = $derived(notifications.filter((n) => !n.is_read).length);
