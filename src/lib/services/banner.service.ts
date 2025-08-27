@@ -56,7 +56,16 @@ export class BannerService {
       // Handle scheduled start date
       let scheduled_start_date: string | null = null;
       if (requestData.schedule_type === 'scheduled' && requestData.scheduled_date && requestData.scheduled_time) {
-        scheduled_start_date = new Date(`${requestData.scheduled_date}T${requestData.scheduled_time}`).toISOString();
+        // Convert local Bangladesh time to UTC
+        const localDateTime = new Date(`${requestData.scheduled_date}T${requestData.scheduled_time}:00+06:00`);
+        const utcDateTime = new Date(localDateTime.toISOString());
+        scheduled_start_date = utcDateTime.toISOString();
+        
+        console.log('Scheduled time conversion in service:', {
+          localDateTime: localDateTime.toISOString(),
+          utcDateTime: utcDateTime.toISOString(),
+          scheduled_start_date
+        });
       }
 
       console.log('Scheduled start date:', scheduled_start_date);
@@ -89,11 +98,13 @@ export class BannerService {
       
       // Determine start date based on schedule type
       if (request.schedule_type === 'scheduled' && request.scheduled_start_date) {
-        // Use the scheduled start date for scheduled requests
+        // Use the scheduled start date for scheduled requests (already in UTC)
         startDate = new Date(request.scheduled_start_date);
+        console.log('Using scheduled start date:', startDate.toISOString());
       } else {
         // Start immediately for immediate requests
         startDate = new Date();
+        console.log('Using immediate start date:', startDate.toISOString());
       }
       
       // Calculate end date based on duration type

@@ -104,12 +104,24 @@ export const actions: Actions = {
         }
 
         // Validate that scheduled date is in the future
-        const scheduledDateTime = new Date(`${scheduled_date}T${scheduled_time}`);
+        // Convert local Bangladesh time to UTC for proper comparison
+        // Create date in Bangladesh timezone (UTC+6)
+        const localDateTime = new Date(`${scheduled_date}T${scheduled_time}:00+06:00`);
+        const utcDateTime = new Date(localDateTime.toISOString());
         const now = new Date();
         
-        if (scheduledDateTime <= now) {
+        console.log('Scheduled time conversion:', {
+          localDateTime: localDateTime.toISOString(),
+          utcDateTime: utcDateTime.toISOString(),
+          now: now.toISOString(),
+          isInPast: utcDateTime <= now
+        });
+        
+        if (utcDateTime <= now) {
           console.log('Scheduled date in past validation failed');
-          return fail(400, { error: 'Scheduled date and time must be in the future' });
+          return fail(400, { 
+            error: `Scheduled date and time must be in the future. You selected ${scheduled_date} ${scheduled_time} (Bangladesh time), which is ${utcDateTime.toISOString()} UTC, but current time is ${now.toISOString()} UTC.` 
+          });
         }
       }
 
