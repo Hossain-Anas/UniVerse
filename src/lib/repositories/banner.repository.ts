@@ -29,18 +29,23 @@ export async function getPendingBannerRequests(supabase: SupabaseClient): Promis
 }
 
 export async function getActiveBanners(supabase: SupabaseClient): Promise<ActiveBanner[]> {
+  const now = new Date().toISOString();
+  
   const { data, error } = await supabase
     .from('banner_requests')
     .select('title, description')
     .eq('status', 'approved')
-    .lte('start_date', new Date().toISOString())
-    .gt('end_date', new Date().toISOString())
+    .lte('start_date', now)  // Banner should have started
+    .gt('end_date', now)     // Banner should not have ended yet
     .order('created_at', { ascending: false });
 
   if (error) {
     throw new Error(`Failed to fetch active banners: ${error.message}`);
   }
 
+  console.log('Active banners query - now:', now);
+  console.log('Active banners found:', data);
+  
   return data || [];
 }
 

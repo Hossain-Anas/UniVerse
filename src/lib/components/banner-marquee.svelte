@@ -12,7 +12,9 @@
   // Fetch active banners
   async function fetchActiveBanners() {
     try {
-      console.log('Fetching active banners...');
+      console.log('=== Fetching active banners ===');
+      console.log('Current time:', new Date().toISOString());
+      
       const bannerController = new BannerController(supabase);
       const result = await bannerController.getActiveBanners();
       
@@ -20,6 +22,7 @@
       
       if (result.success) {
         activeBanners = result.data || [];
+        console.log('Active banners count:', activeBanners.length);
         console.log('Active banners:', activeBanners);
       } else {
         error = result.error || 'Failed to load banners';
