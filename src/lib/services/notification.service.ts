@@ -93,7 +93,10 @@ export class NotificationService {
 
     // Use the actual event date instead of reminder time
     const eventDate = event.event_date ? new Date(event.event_date) : new Date();
-    const formattedEventTime = eventDate.toLocaleString();
+    // Add 6 hours to convert to Bangladesh time and use only the date portion
+    const bangladeshDate = new Date(eventDate.getTime() + (6 * 60 * 60 * 1000));
+    const dateOnly = bangladeshDate.toLocaleDateString();
+    const formattedEventTime = dateOnly;
 
     const notificationData: CreateNotificationInput = {
       title: `Event Reminder: ${event.title}`,

@@ -12,18 +12,11 @@
   // Fetch active banners
   async function fetchActiveBanners() {
     try {
-      console.log('=== Fetching active banners ===');
-      console.log('Current time:', new Date().toISOString());
-      
       const bannerController = new BannerController(supabase);
       const result = await bannerController.getActiveBanners();
       
-      console.log('Banner fetch result:', result);
-      
       if (result.success) {
         activeBanners = result.data || [];
-        console.log('Active banners count:', activeBanners.length);
-        console.log('Active banners:', activeBanners);
       } else {
         error = result.error || 'Failed to load banners';
         console.error('Banner fetch error:', error);
@@ -33,7 +26,6 @@
       console.error('Error fetching active banners:', err);
     } finally {
       isLoading = false;
-      console.log('Loading finished, isLoading:', isLoading);
     }
   }
 
@@ -41,7 +33,6 @@
   let refreshInterval: ReturnType<typeof setInterval>;
 
   onMount(() => {
-    console.log('BannerMarquee component mounted');
     fetchActiveBanners();
     
     // Set up real-time subscription for banner changes

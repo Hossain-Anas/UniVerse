@@ -141,14 +141,23 @@ export const actions: Actions = {
 
       if (result.success) {
         console.log('Success - returning success response');
-        return { success: true };
+        return { 
+          success: true,
+          message: 'Your advertisement request has been submitted successfully! An admin will review it soon.'
+        };
       } else {
         console.log('BannerController failed:', result.error);
-        return fail(500, { error: result.error || 'Failed to create banner request' });
+        return fail(500, { 
+          error: result.error || 'Failed to create banner request',
+          message: result.error || 'Failed to create banner request'
+        });
       }
     } catch (error) {
       console.error('Unexpected error in createBannerRequest:', error);
-      return fail(500, { error: 'An unexpected error occurred' });
+      return fail(500, { 
+        error: 'An unexpected error occurred',
+        message: 'An unexpected error occurred'
+      });
     }
   }
 };

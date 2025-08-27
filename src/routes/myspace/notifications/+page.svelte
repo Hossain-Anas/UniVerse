@@ -309,6 +309,17 @@
     return new Date(dateString).toLocaleString();
   }
 
+  function stripTimeFromReminder(message: string): string {
+    // Removes patterns like ", 5:30:00 AM" or ", 17:05:00" from the message part after the date
+    return message.replace(/,\s*\d{1,2}:\d{2}:\d{2}(\s*[AP]M)?\.?/g, '');
+  }
+
+  function getDisplayMessage(notification: any): string {
+    return notification?.type === 'event'
+      ? stripTimeFromReminder(notification.message)
+      : notification.message;
+  }
+
   const unreadCount = $derived(notifications.filter((n) => !n.is_read).length);
 </script>
 
@@ -378,22 +389,24 @@
                   <Table.Cell class="text-[hsl(222.2_47.4%_11.2%)] max-w-xs">
                     <button 
                       class="truncate cursor-pointer hover:text-blue-300 transition-colors text-left w-full bg-transparent border-none p-0"
-                      title={notification.message}
+                      title={getDisplayMessage(notification)}
                       onclick={() => {
-                        if (notification.message.length > 50) {
-                          alert(notification.message);
+                        const msg = getDisplayMessage(notification);
+                        if (notification.type === 'event' || msg.length > 50) {
+                          alert(msg);
                         }
                       }}
                       onkeydown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          if (notification.message.length > 50) {
-                            alert(notification.message);
+                          const msg = getDisplayMessage(notification);
+                          if (notification.type === 'event' || msg.length > 50) {
+                            alert(msg);
                           }
                         }
                       }}
                     >
-                      {notification.message}
+                      {getDisplayMessage(notification)}
                     </button>
                   </Table.Cell>
                   <Table.Cell class="text-[hsl(222.2_47.4%_11.2%)] text-sm">

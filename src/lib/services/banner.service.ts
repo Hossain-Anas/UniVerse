@@ -33,9 +33,6 @@ export class BannerService {
   }
 
   async createBannerRequest(userId: string, requestData: CreateBannerRequestInput): Promise<{ success: boolean; data?: BannerRequest; error?: string }> {
-    console.log('=== BannerService.createBannerRequest started ===');
-    console.log('UserId:', userId);
-    console.log('RequestData:', requestData);
     
     try {
       // Set duration based on the type - only set the relevant field
@@ -51,8 +48,6 @@ export class BannerService {
         duration_days = requestData.duration_value;
       }
 
-      console.log('Duration calculations:', { duration_days, duration_hours, duration_minutes });
-
       // Handle scheduled start date
       let scheduled_start_date: string | null = null;
       if (requestData.schedule_type === 'scheduled' && requestData.scheduled_date && requestData.scheduled_time) {
@@ -60,15 +55,7 @@ export class BannerService {
         const localDateTime = new Date(`${requestData.scheduled_date}T${requestData.scheduled_time}:00+06:00`);
         const utcDateTime = new Date(localDateTime.toISOString());
         scheduled_start_date = utcDateTime.toISOString();
-        
-        console.log('Scheduled time conversion in service:', {
-          localDateTime: localDateTime.toISOString(),
-          utcDateTime: utcDateTime.toISOString(),
-          scheduled_start_date
-        });
       }
-
-      console.log('Scheduled start date:', scheduled_start_date);
 
       const data = await BannerRepository.createBannerRequest(this.supabase, userId, {
         ...requestData,
@@ -78,7 +65,6 @@ export class BannerService {
         scheduled_start_date
       });
       
-      console.log('BannerRepository.createBannerRequest result:', data);
       return { success: true, data };
     } catch (error) {
       console.error('BannerService.createBannerRequest error:', error);
@@ -100,11 +86,9 @@ export class BannerService {
       if (request.schedule_type === 'scheduled' && request.scheduled_start_date) {
         // Use the scheduled start date for scheduled requests (already in UTC)
         startDate = new Date(request.scheduled_start_date);
-        console.log('Using scheduled start date:', startDate.toISOString());
       } else {
         // Start immediately for immediate requests
         startDate = new Date();
-        console.log('Using immediate start date:', startDate.toISOString());
       }
       
       // Calculate end date based on duration type
@@ -136,7 +120,7 @@ export class BannerService {
         const notificationController = new NotificationController(this.supabase);
         
         const notificationMessage = request.schedule_type === 'scheduled' 
-          ? `Your banner request "${request.title}" has been approved and will start displaying on ${startDate.toLocaleString()}`
+          ? `Your banner request "${request.title}" has been approved and will start displaying on ${startDate.toLocaleString('en-US', { timeZone: 'Asia/Dhaka' })}`
           : `Your banner request "${request.title}" has been approved and is now live!`;
         
         await notificationController.createNotification(request.user_id, {

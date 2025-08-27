@@ -1,9 +1,5 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { page } from '$app/stores';
-  import type { PageData } from './$types';
-  
-  export let data: PageData;
   
   let bannerForm = {
     title: '',
@@ -16,6 +12,8 @@
   };
   
   let isSubmitting = false;
+  let successMessage = '';
+  let errorMessage = '';
   
   function resetForm() {
     bannerForm = {
@@ -49,13 +47,13 @@
       </div>
       
       <!-- Success/Error Messages -->
-      {#if data.success}
+      {#if successMessage}
         <div class="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg text-green-200">
-          <p>Your advertisement request has been submitted successfully! An admin will review it soon.</p>
+          <p>{successMessage}</p>
         </div>
-      {:else if data.error}
+      {:else if errorMessage}
         <div class="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200">
-          <p>Error: {data.error}</p>
+          <p>Error: {errorMessage}</p>
         </div>
       {/if}
       
@@ -72,9 +70,17 @@
               isSubmitting = false;
               if (result.type === 'success') {
                 console.log('Form submission successful');
+                successMessage = 'Your advertisement request has been submitted successfully! An admin will review it soon.';
+                errorMessage = ''; // Clear any previous error
                 resetForm();
+              } else if (result.type === 'failure') {
+                console.log('Form submission failed:', result);
+                errorMessage = (result.data?.message as string) || 'Error submitting advertisement request.';
+                successMessage = ''; // Clear any previous success
               } else {
                 console.log('Form submission failed:', result);
+                errorMessage = 'Error submitting advertisement request.';
+                successMessage = ''; // Clear any previous success
               }
             };
           }}

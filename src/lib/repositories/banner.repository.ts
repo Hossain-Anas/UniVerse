@@ -42,9 +42,6 @@ export async function getActiveBanners(supabase: SupabaseClient): Promise<Active
   if (error) {
     throw new Error(`Failed to fetch active banners: ${error.message}`);
   }
-
-  console.log('Active banners query - now:', now);
-  console.log('Active banners found:', data);
   
   return data || [];
 }

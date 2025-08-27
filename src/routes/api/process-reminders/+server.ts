@@ -28,7 +28,10 @@ export const POST: RequestHandler = async () => {
         if (eErr) throw eErr
 
         const eventDate = event?.event_date ? new Date(event.event_date) : new Date()
-        const msg = `Don't forget! ${event?.title ?? 'Event'} is happening on ${eventDate.toLocaleString()}.`
+        // Add 6 hours to convert to Bangladesh time and use only the date portion
+        const bangladeshDate = new Date(eventDate.getTime() + (6 * 60 * 60 * 1000));
+        const dateOnly = bangladeshDate.toLocaleDateString();
+        const msg = `Don't forget! ${event?.title ?? 'Event'} is happening on ${dateOnly}.`
 
         const { error: nErr } = await serviceSupabase
           .from('notifications')
