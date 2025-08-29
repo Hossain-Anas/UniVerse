@@ -66,6 +66,7 @@
   });
 </script>
 
+
 <div class="min-h-[100dvh] bg-[hsl(222.2_47.4%_11.2%)] text-white overflow-hidden">
 <nav class="w-full bg-transparent text-white">
   <div class="w-full flex justify-center">
