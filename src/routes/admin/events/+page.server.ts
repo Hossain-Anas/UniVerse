@@ -116,7 +116,9 @@ export const actions: Actions = {
     // Combine date and time
     let eventDate: string | undefined = undefined;
     if (date && time) {
-      eventDate = new Date(`${date}T${time}`).toISOString();
+      // Convert local Bangladesh time to UTC for storage
+      const localDateTime = new Date(`${date}T${time}:00+06:00`);
+      eventDate = new Date(localDateTime.toISOString()).toISOString();
     } else if (date) {
       eventDate = new Date(date).toISOString();
     }
